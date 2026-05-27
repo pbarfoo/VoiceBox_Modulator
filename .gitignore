@@ -1,0 +1,35 @@
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Vite
+*.local
+
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+**/__pycache__/
+**/*.pyc
+*.egg-info/
+
+# Model checkpoints & audio (large binary files)
+backend/seed_vc/checkpoints/
+backend/seed_vc/**/__pycache__/
+backend/seed_vc/__pycache__/
+
+# App data (audio uploads, SQLite DB)
+backend/app_data/
+
+# Logs
+*.log
+
+# Env
+.env
+.env.*
+backend/seed_vc/campplus_cn_common.bin
