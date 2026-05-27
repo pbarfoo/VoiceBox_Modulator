@@ -159,14 +159,15 @@ function JobProgress({ job }: { job: Job }) {
   );
 }
 
-// ── quality presets ───────────────────────────────────────────────────────────
+// ── quality / steps ───────────────────────────────────────────────────────────
 
-const QUALITY_PRESETS = [
-  { id: "fast",     label: "Fast",     steps: 10, hint: "Quick · more artefacts" },
-  { id: "balanced", label: "Balanced", steps: 25, hint: "Recommended" },
-  { id: "high",     label: "High",     steps: 50, hint: "Best quality · slower" },
-] as const;
-type QualityId = (typeof QUALITY_PRESETS)[number]["id"];
+const STEP_MARKS = [
+  { steps: 10,  label: "10",  hint: "Fast" },
+  { steps: 25,  label: "25",  hint: "Balanced" },
+  { steps: 50,  label: "50",  hint: "High" },
+  { steps: 100, label: "100", hint: "Ultra" },
+  { steps: 150, label: "150", hint: "Max" },
+];
 
 // ── main view ─────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,7 @@ export function ConvertView() {
   const [source,    setSource]    = useState<File | null>(null);
   const [target,    setTarget]    = useState<File | null>(null);
   const [profileId, setProfileId] = useState<string>("");
-  const [quality,   setQuality]   = useState<QualityId>("balanced");
+  const [steps, setSteps] = useState<number>(25);
   const [job,       setJob]       = useState<Job | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -194,10 +195,9 @@ export function ConvertView() {
   const startConvert = useMutation({
     mutationFn: async () => {
       if (!source) throw new Error("Choose a source recording first");
-      const preset = QUALITY_PRESETS.find((p) => p.id === quality)!;
-      const form   = new FormData();
+      const form = new FormData();
       form.append("source", source);
-      form.append("diffusion_steps", String(preset.steps));
+      form.append("diffusion_steps", String(steps));
       if (profileId) form.append("profile_id", profileId);
       else if (target) form.append("target", target);
       else throw new Error("Choose a target sample or pick a saved voice");
@@ -224,8 +224,8 @@ export function ConvertView() {
     },
   });
 
-  const isRunning   = job?.status === "queued" || job?.status === "running";
-  const engineReady = engine.data?.loaded ?? false;
+  const isRunning    = job?.status === "queued" || job?.status === "running";
+  const engineReady  = engine.data?.loaded ?? false;
 
   return (
     <div className="p-8 max-w-[600px] mx-auto space-y-6">
@@ -270,25 +270,38 @@ export function ConvertView() {
         )}
       </div>
 
-      {/* Quality */}
+      {/* Diffusion steps */}
       <div>
-        <SectionLabel>Quality preset</SectionLabel>
-        <div className="grid grid-cols-3 gap-2">
-          {QUALITY_PRESETS.map((p) => {
-            const active = quality === p.id;
-            return (
-              <button key={p.id} onClick={() => setQuality(p.id)}
-                className="rounded-lg px-3 py-2.5 text-left text-[12px] transition-all duration-100"
-                style={{
-                  background: active ? "rgba(124,77,255,0.14)" : SURFACE,
-                  border: `1px solid ${active ? "rgba(124,77,255,0.4)" : BORDER}`,
-                  color: active ? "#c9aaff" : SECONDARY,
-                }}>
-                <div className="font-medium text-[13px]">{p.label}</div>
-                <div className="mt-0.5" style={{ color: active ? "rgba(201,170,255,0.6)" : MUTED }}>{p.hint}</div>
+        <SectionLabel>Diffusion steps</SectionLabel>
+        <div className="rounded-xl px-4 py-3 space-y-3"
+          style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: SECONDARY }}>
+              {STEP_MARKS.find(m => m.steps === steps)?.hint ?? "Custom"}
+            </span>
+            <span className="text-[13px] font-mono tabular-nums font-medium"
+              style={{ color: "#c9aaff" }}>
+              {steps} steps
+            </span>
+          </div>
+          <input
+            type="range" min={5} max={150} step={1} value={steps}
+            onChange={(e) => setSteps(Number(e.target.value))}
+            className="w-full"
+            style={{ accentColor: "#7c4dff" }}
+          />
+          {/* tick marks */}
+          <div className="flex justify-between text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>
+            {STEP_MARKS.map(m => (
+              <button key={m.steps} onClick={() => setSteps(m.steps)}
+                style={{ color: steps === m.steps ? "#9d7bff" : undefined }}>
+                {m.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
+          <p className="text-[11px]" style={{ color: MUTED }}>
+            Higher steps = better quality but slower. Above 50 has diminishing returns.
+          </p>
         </div>
       </div>
 

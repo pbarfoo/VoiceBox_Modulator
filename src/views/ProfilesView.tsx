@@ -114,7 +114,7 @@ export function ProfilesView() {
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition"
             style={{ background: SURFACE2, border: `1px solid ${BORDER}` }}
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ color: MUTED, shrink: 0 }}>
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ color: MUTED, flexShrink: 0 }}>
               <path d="M7.5 1.5a.5.5 0 0 1 .5.5v5.793l1.646-1.647a.5.5 0 0 1 .708.708l-2.5 2.5a.5.5 0 0 1-.708 0l-2.5-2.5a.5.5 0 1 1 .708-.708L7 7.793V2a.5.5 0 0 1 .5-.5ZM2 11.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"/>
             </svg>
             <div className="flex-1 min-w-0">
