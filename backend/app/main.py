@@ -4,13 +4,13 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from . import db, jobs as job_store
 from .config import APP_NAME, audio_dir
-from .vc_engine import EngineNotReady, engine
+from .engines import manager, EngineNotReady, EngineParams
 
 app = FastAPI(title=f"{APP_NAME} API", version="0.1.0")
 
@@ -36,24 +36,30 @@ def health() -> dict:
 
 @app.get("/engine/status")
 def engine_status() -> dict:
-    return engine.status()
+    return manager.status()
+
+
+@app.post("/engine/select")
+def engine_select(engine: str = Query("seedvc")) -> dict:
+    """Switch the active engine. Unloads the previous one first."""
+    try:
+        return manager.select_engine(engine)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/engine/load")
-def engine_load(model: str = "hifi") -> dict:
-    """Start loading the model in a background thread. Poll /engine/status.
-    model: 'hifi' (44kHz+F0, default) or 'standard' (22kHz)
-    """
-    variant = model if model in ("hifi", "standard") else "hifi"
-    if engine.is_ready() and engine._variant == variant:
-        return engine.status()
-    engine.load_async(variant=variant)
-    return engine.status()
+def engine_load(model: str = "seedvc") -> dict:
+    """Backward-compat alias for /engine/select."""
+    try:
+        return manager.select_engine(model)
+    except ValueError:
+        return manager.select_engine("seedvc")
 
 
 @app.post("/engine/unload")
 def engine_unload() -> dict:
-    return engine.unload()
+    return manager._active.unload()
 
 
 # ── conversion ───────────────────────────────────────────────────────────────
@@ -72,12 +78,10 @@ async def convert(
     target: Optional[UploadFile] = File(None),
     profile_id: Optional[str] = Form(None),
     diffusion_steps: int = Form(25),
+    tau: float = Form(0.3),
+    f0_up_key: int = Form(0),
 ) -> dict:
-    """
-    Start an async conversion job. Returns a job object immediately.
-    Poll GET /jobs/{job_id} for progress.
-    """
-    # Resolve reference audio
+    """Start an async conversion job. Returns a job object immediately."""
     source_path = _save_upload(source, "source")
 
     profile = None
@@ -92,9 +96,8 @@ async def convert(
         raise HTTPException(400, "provide either a target sample or a profile_id")
 
     out_path = audio_dir() / f"out_{uuid.uuid4().hex}.wav"
-
-    # Create job immediately
-    job = job_store.create()
+    params   = EngineParams(diffusion_steps=diffusion_steps, tau=tau, f0_up_key=f0_up_key)
+    job      = job_store.create()
 
     def _run() -> None:
         job_store.update(job.id, status="running", stage="Starting conversion", progress=0.02)
@@ -102,15 +105,14 @@ async def convert(
             def _progress(stage: str, pct: float) -> None:
                 job_store.update(job.id, stage=stage, progress=pct)
 
-            engine.convert(
-                str(source_path), str(ref_path), str(out_path),
-                diffusion_steps=diffusion_steps,
-                progress_cb=_progress,
+            manager.convert(
+                str(source_path), ref_path, str(out_path),
+                params=params, progress_cb=_progress,
             )
             rec = db.add_conversion(
                 source_path=str(source_path),
                 output_path=str(out_path),
-                engine=engine.MODEL_NAME,
+                engine=manager.MODEL_NAME,
                 profile_id=profile["id"] if profile else None,
                 profile_name=profile["name"] if profile else None,
             )

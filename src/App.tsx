@@ -72,7 +72,8 @@ function EngineStatus() {
   const isLoaded  = d?.loaded;
   const isLoading = d?.loading;
   const dotColor  = isLoaded ? "#34d399" : isLoading ? "#fbbf24" : "rgba(255,255,255,0.18)";
-  const label     = isLoading ? "Loading model…" : isLoaded ? "Engine ready" : "Engine idle";
+  const label     = isLoading ? "Loading…" : isLoaded ? "Engine ready" : "Engine idle";
+  const engineLabel = d?.engine_id ? d.engine_id.toUpperCase() : null;
 
   return (
     <div className="space-y-1.5">
@@ -88,9 +89,9 @@ function EngineStatus() {
           {label}
         </span>
       </div>
-      {d?.device && (
+      {(engineLabel || d?.device) && (
         <div className="text-[10px] pl-3.5 font-mono" style={{ color: "rgba(255,255,255,0.18)" }}>
-          {d.device.toUpperCase()}
+          {[engineLabel, d?.device?.toUpperCase()].filter(Boolean).join(" · ")}
         </div>
       )}
     </div>
