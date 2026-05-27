@@ -14,8 +14,6 @@ from .base import (
 
 os.environ.setdefault("HF_HUB_CACHE", str(CHECKPOINTS_DIR))
 
-# Config already vendored with seed-vc
-OV_CONFIG = SEED_VC_DIR / "modules" / "openvoice" / "checkpoints_v2" / "converter" / "config.json"
 
 
 class OpenVoiceEngine(BaseEngine):
@@ -36,20 +34,18 @@ class OpenVoiceEngine(BaseEngine):
 
         from modules.openvoice.api import ToneColorConverter
 
-        if not OV_CONFIG.exists():
-            raise EngineNotReady(
-                f"OpenVoice v2 config not found at {OV_CONFIG}. "
-                "Ensure seed-vc is fully vendored."
-            )
-
-        # Download the v2 converter checkpoint (~120 MB, cached after first run)
+        # Download v2 converter checkpoint + config (~120 MB, cached after first run)
         converter_pth = hf_hub_download(
-            "myshell-ai/OpenVoiceV2", "converter.pth",
+            "myshell-ai/OpenVoiceV2", "converter/checkpoint.pth",
+            cache_dir=str(CHECKPOINTS_DIR)
+        )
+        converter_cfg = hf_hub_download(
+            "myshell-ai/OpenVoiceV2", "converter/config.json",
             cache_dir=str(CHECKPOINTS_DIR)
         )
 
         # "mps" bypasses the cuda assertion in OpenVoiceBaseClass.__init__
-        self._converter = ToneColorConverter(str(OV_CONFIG), device=self._device_str)
+        self._converter = ToneColorConverter(str(converter_cfg), device=self._device_str)
         self._converter.load_ckpt(converter_pth)
         self._sr = self._converter.hps.data.sampling_rate   # 22050
         self._loaded = True
