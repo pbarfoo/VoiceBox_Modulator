@@ -1,20 +1,15 @@
 """
-EngineManager — holds the active engine and handles switching between engines.
+EngineManager — holds the active engine.
 """
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
 
 from .base import BaseEngine, EngineParams, EngineNotReady
-from .seed_vc  import SeedVCEngine
-from .openvoice import OpenVoiceEngine
-from .rvc      import RVCEngine
+from .seed_vc import SeedVCEngine
 
 _ENGINE_CLASSES: dict[str, type[BaseEngine]] = {
-    "seedvc":    SeedVCEngine,
-    "openvoice": OpenVoiceEngine,
-    "rvc":       RVCEngine,
+    "seedvc": SeedVCEngine,
 }
 
 
@@ -23,31 +18,21 @@ class EngineManager:
         self._active: BaseEngine = SeedVCEngine()
         self._switch_lock = threading.Lock()
 
-    # ── public API ────────────────────────────────────────────────────────────
-
     def select_engine(self, engine_id: str, **load_kwargs) -> dict:
-        """Switch to the given engine. Unloads the current one first if different."""
         engine_id = engine_id.lower()
         if engine_id not in _ENGINE_CLASSES:
-            raise ValueError(f"Unknown engine '{engine_id}'. Choose from: {list(_ENGINE_CLASSES)}")
+            engine_id = "seedvc"
 
         with self._switch_lock:
-            # Already the right engine and loaded — nothing to do
             if self._active.ENGINE_ID == engine_id and self._active.is_ready():
                 return self._active.status()
-
-            # If same engine is still loading, just return current status
             if self._active.ENGINE_ID == engine_id and self._active._loading:
                 return self._active.status()
-
-            # Unload current engine (frees GPU memory)
             if self._active.is_ready() or self._active._loading:
                 try:
                     self._active.unload()
                 except Exception:
                     pass
-
-            # Instantiate and start loading the new engine
             self._active = _ENGINE_CLASSES[engine_id]()
             self._active.load_async(**load_kwargs)
 

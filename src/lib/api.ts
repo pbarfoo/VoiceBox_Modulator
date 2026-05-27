@@ -27,15 +27,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export type EngineId = "seedvc" | "openvoice" | "rvc";
-
 export interface EngineStatus {
   loaded: boolean;
   loading: boolean;
   load_error: string | null;
   device: string;
   model: string;
-  engine_id: EngineId | "";
+  engine_id: string;
   torch_available: boolean;
 }
 
@@ -72,13 +70,7 @@ export interface Job {
 export const api = {
   health:       () => req<{ status: string; app: string }>("/health"),
   engineStatus: () => req<EngineStatus>("/engine/status"),
-
-  selectEngine: (engineId: EngineId) =>
-    req<EngineStatus>(`/engine/select?engine=${engineId}`, { method: "POST" }),
-
-  loadEngine: (model: EngineId = "seedvc") =>
-    req<EngineStatus>(`/engine/select?engine=${model}`, { method: "POST" }),
-
+  loadEngine:   () => req<EngineStatus>("/engine/select?engine=seedvc", { method: "POST" }),
   unloadEngine: () => req<EngineStatus>("/engine/unload", { method: "POST" }),
 
   profiles:      () => req<Profile[]>("/profiles"),

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type EngineId, type Job } from "../lib/api";
-import { useUI } from "../store";
+import { api, type Job } from "../lib/api";
 
 // ── shared tokens ─────────────────────────────────────────────────────────────
 const SURFACE   = "rgba(255,255,255,0.03)";
@@ -59,59 +58,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── engine picker ─────────────────────────────────────────────────────────────
-
-const ENGINE_DEFS: { id: EngineId; label: string; hint: string; experimental?: boolean }[] = [
-  { id: "seedvc",    label: "seed-vc",    hint: "Diffusion · best zero-shot quality" },
-  { id: "openvoice", label: "OpenVoice",  hint: "VITS timbre transfer · fast" },
-  { id: "rvc",       label: "RVC",        hint: "Pitch-based · zero-shot", experimental: true },
-];
-
-function EnginePicker({
-  selected, onChange, disabled,
-}: { selected: EngineId; onChange: (id: EngineId) => void; disabled?: boolean }) {
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {ENGINE_DEFS.map((e) => {
-        const active = selected === e.id;
-        return (
-          <button
-            key={e.id}
-            onClick={() => !disabled && onChange(e.id)}
-            disabled={disabled}
-            className="rounded-lg px-3 py-2.5 text-left text-[12px] transition-all duration-100 relative"
-            style={{
-              background: active ? "rgba(124,77,255,0.14)" : SURFACE,
-              border: `1px solid ${active ? "rgba(124,77,255,0.4)" : BORDER}`,
-              color: active ? "#c9aaff" : SECONDARY,
-              cursor: disabled ? "not-allowed" : "pointer",
-              opacity: disabled ? 0.6 : 1,
-            }}
-          >
-            <div className="font-medium text-[13px] flex items-center gap-1.5">
-              {e.label}
-              {e.experimental && (
-                <span className="text-[9px] px-1 py-0.5 rounded font-mono"
-                  style={{ background: "rgba(251,191,36,0.15)", color: "rgba(251,191,36,0.8)",
-                    border: "1px solid rgba(251,191,36,0.25)", letterSpacing: "0.04em" }}>
-                  BETA
-                </span>
-              )}
-            </div>
-            <div className="mt-0.5 text-[10px]"
-              style={{ color: active ? "rgba(201,170,255,0.6)" : MUTED }}>
-              {e.hint}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── engine gate ───────────────────────────────────────────────────────────────
 
-function EngineGate({ selectedEngine }: { selectedEngine: EngineId }) {
+function EngineGate() {
   const qc = useQueryClient();
   const engine = useQuery({
     queryKey: ["engine"],
@@ -119,43 +68,39 @@ function EngineGate({ selectedEngine }: { selectedEngine: EngineId }) {
     refetchInterval: (q) => q.state.data?.loading ? 2000 : 10000,
   });
 
-  const select = useMutation({
-    mutationFn: () => api.selectEngine(selectedEngine),
+  const load = useMutation({
+    mutationFn: () => api.loadEngine(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["engine"] }),
   });
 
-  const d = engine.data;
-  // Hide if already loaded with the right engine
-  if (!d || (d.loaded && d.engine_id === selectedEngine)) return null;
+  if (!engine.data || engine.data.loaded) return null;
 
   return (
     <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-4"
       style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.18)" }}>
       <div className="text-[13px]">
-        {d.loading ? (
+        {engine.data.loading ? (
           <span className="flex items-center gap-2">
             <span className="w-3 h-3 border-2 rounded-full animate-spin shrink-0"
               style={{ borderColor: "rgba(251,191,36,0.4)", borderTopColor: "#fbbf24" }} />
             <span style={{ color: "rgba(251,191,36,0.75)" }}>
-              Loading {ENGINE_DEFS.find(e => e.id === selectedEngine)?.label ?? "engine"}…
+              Loading model — first run downloads ~500 MB…
             </span>
           </span>
-        ) : d.load_error ? (
-          <span style={{ color: "#f87171" }}>{d.load_error}</span>
+        ) : engine.data.load_error ? (
+          <span style={{ color: "#f87171" }}>{engine.data.load_error}</span>
         ) : (
           <span style={{ color: "rgba(251,191,36,0.6)" }}>
-            {d.loaded && d.engine_id !== selectedEngine
-              ? `Switch to ${ENGINE_DEFS.find(e => e.id === selectedEngine)?.label}`
-              : "Voice model not loaded — load it first to convert audio."}
+            Voice model not loaded — load it first to convert audio.
           </span>
         )}
       </div>
-      {!d.loading && (
-        <button onClick={() => select.mutate()} disabled={select.isPending}
+      {!engine.data.loading && (
+        <button onClick={() => load.mutate()} disabled={load.isPending}
           className="shrink-0 rounded-lg px-3 py-1.5 text-[12px] transition"
           style={{ background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)",
             color: "rgba(251,191,36,0.9)" }}>
-          {d.loaded && d.engine_id !== selectedEngine ? "Switch engine" : "Load engine"}
+          Load model
         </button>
       )}
     </div>
@@ -181,7 +126,8 @@ function JobProgress({ job }: { job: Job }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-[12px]" style={{ color: isFailed ? "#f87171" : isDone ? "#34d399" : "rgba(255,255,255,0.65)" }}>
+        <span className="text-[12px]"
+          style={{ color: isFailed ? "#f87171" : isDone ? "#34d399" : "rgba(255,255,255,0.65)" }}>
           {isFailed ? (job.error ?? "Conversion failed") : job.stage}
         </span>
         <span className="text-[11px] font-mono tabular-nums" style={{ color: MUTED }}>{pct}%</span>
@@ -213,35 +159,19 @@ function JobProgress({ job }: { job: Job }) {
   );
 }
 
-// ── quality / params per engine ───────────────────────────────────────────────
+// ── quality presets ───────────────────────────────────────────────────────────
 
-type QualityId = "fast" | "balanced" | "high";
-
-const QUALITY_PRESETS: {
-  id: QualityId; label: string;
-  seedvc: { diffusion_steps: number; hint: string };
-  openvoice: { tau: number; hint: string };
-  rvc: { hint: string };
-}[] = [
-  { id: "fast",     label: "Fast",
-    seedvc:    { diffusion_steps: 10, hint: "10 steps · quick" },
-    openvoice: { tau: 0.7,  hint: "τ=0.7 · loose" },
-    rvc:       { hint: "Pitch shift only" } },
-  { id: "balanced", label: "Balanced",
-    seedvc:    { diffusion_steps: 25, hint: "25 steps · recommended" },
-    openvoice: { tau: 0.3,  hint: "τ=0.3 · recommended" },
-    rvc:       { hint: "Pitch shift only" } },
-  { id: "high",     label: "High",
-    seedvc:    { diffusion_steps: 50, hint: "50 steps · slower" },
-    openvoice: { tau: 0.1,  hint: "τ=0.1 · tight" },
-    rvc:       { hint: "Pitch shift only" } },
-];
+const QUALITY_PRESETS = [
+  { id: "fast",     label: "Fast",     steps: 10, hint: "Quick · more artefacts" },
+  { id: "balanced", label: "Balanced", steps: 25, hint: "Recommended" },
+  { id: "high",     label: "High",     steps: 50, hint: "Best quality · slower" },
+] as const;
+type QualityId = (typeof QUALITY_PRESETS)[number]["id"];
 
 // ── main view ─────────────────────────────────────────────────────────────────
 
 export function ConvertView() {
   const qc = useQueryClient();
-  const { selectedEngine, setSelectedEngine } = useUI();
   const engine   = useQuery({ queryKey: ["engine"],   queryFn: api.engineStatus, refetchInterval: 5000 });
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
 
@@ -249,7 +179,6 @@ export function ConvertView() {
   const [target,    setTarget]    = useState<File | null>(null);
   const [profileId, setProfileId] = useState<string>("");
   const [quality,   setQuality]   = useState<QualityId>("balanced");
-  const [f0UpKey,   setF0UpKey]   = useState<number>(0);
   const [job,       setJob]       = useState<Job | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -262,31 +191,16 @@ export function ConvertView() {
 
   function reset() { stopPolling(); setJob(null); setResultUrl(null); }
 
-  function handleEngineChange(id: EngineId) {
-    setSelectedEngine(id);
-    reset();
-  }
-
   const startConvert = useMutation({
     mutationFn: async () => {
       if (!source) throw new Error("Choose a source recording first");
       const preset = QUALITY_PRESETS.find((p) => p.id === quality)!;
       const form   = new FormData();
       form.append("source", source);
-
-      // Engine-specific params
-      if (selectedEngine === "seedvc") {
-        form.append("diffusion_steps", String(preset.seedvc.diffusion_steps));
-      } else if (selectedEngine === "openvoice") {
-        form.append("tau", String(preset.openvoice.tau));
-      } else if (selectedEngine === "rvc") {
-        form.append("f0_up_key", String(f0UpKey));
-      }
-
+      form.append("diffusion_steps", String(preset.steps));
       if (profileId) form.append("profile_id", profileId);
       else if (target) form.append("target", target);
       else throw new Error("Choose a target sample or pick a saved voice");
-
       return api.startConvert(form);
     },
     onSuccess: (initialJob) => {
@@ -310,9 +224,8 @@ export function ConvertView() {
     },
   });
 
-  const isRunning    = job?.status === "queued" || job?.status === "running";
-  const engineLoaded = engine.data?.loaded && engine.data?.engine_id === selectedEngine;
-  const isLoading    = engine.data?.loading ?? false;
+  const isRunning   = job?.status === "queued" || job?.status === "running";
+  const engineReady = engine.data?.loaded ?? false;
 
   return (
     <div className="p-8 max-w-[600px] mx-auto space-y-6">
@@ -326,13 +239,7 @@ export function ConvertView() {
         </p>
       </header>
 
-      {/* Engine picker */}
-      <div>
-        <SectionLabel>Engine</SectionLabel>
-        <EnginePicker selected={selectedEngine} onChange={handleEngineChange} disabled={isLoading || isRunning} />
-      </div>
-
-      <EngineGate selectedEngine={selectedEngine} />
+      <EngineGate />
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
 
@@ -363,66 +270,40 @@ export function ConvertView() {
         )}
       </div>
 
-      {/* Quality / params */}
-      {selectedEngine !== "rvc" ? (
-        <div>
-          <SectionLabel>Quality preset</SectionLabel>
-          <div className="grid grid-cols-3 gap-2">
-            {QUALITY_PRESETS.map((p) => {
-              const active = quality === p.id;
-              const hint = selectedEngine === "openvoice" ? p.openvoice.hint : p.seedvc.hint;
-              return (
-                <button key={p.id} onClick={() => setQuality(p.id)}
-                  className="rounded-lg px-3 py-2.5 text-left text-[12px] transition-all duration-100"
-                  style={{
-                    background: active ? "rgba(124,77,255,0.14)" : SURFACE,
-                    border: `1px solid ${active ? "rgba(124,77,255,0.4)" : BORDER}`,
-                    color: active ? "#c9aaff" : SECONDARY,
-                  }}>
-                  <div className="font-medium text-[13px]">{p.label}</div>
-                  <div className="mt-0.5" style={{ color: active ? "rgba(201,170,255,0.6)" : MUTED }}>{hint}</div>
-                </button>
-              );
-            })}
-          </div>
+      {/* Quality */}
+      <div>
+        <SectionLabel>Quality preset</SectionLabel>
+        <div className="grid grid-cols-3 gap-2">
+          {QUALITY_PRESETS.map((p) => {
+            const active = quality === p.id;
+            return (
+              <button key={p.id} onClick={() => setQuality(p.id)}
+                className="rounded-lg px-3 py-2.5 text-left text-[12px] transition-all duration-100"
+                style={{
+                  background: active ? "rgba(124,77,255,0.14)" : SURFACE,
+                  border: `1px solid ${active ? "rgba(124,77,255,0.4)" : BORDER}`,
+                  color: active ? "#c9aaff" : SECONDARY,
+                }}>
+                <div className="font-medium text-[13px]">{p.label}</div>
+                <div className="mt-0.5" style={{ color: active ? "rgba(201,170,255,0.6)" : MUTED }}>{p.hint}</div>
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        <div>
-          <SectionLabel>Pitch shift</SectionLabel>
-          <div className="rounded-xl px-4 py-3 space-y-2"
-            style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div className="flex items-center justify-between text-[12px]">
-              <span style={{ color: SECONDARY }}>Semitone offset</span>
-              <span className="font-mono tabular-nums" style={{ color: f0UpKey === 0 ? MUTED : "#c9aaff" }}>
-                {f0UpKey > 0 ? `+${f0UpKey}` : f0UpKey}
-              </span>
-            </div>
-            <input type="range" min={-12} max={12} step={1} value={f0UpKey}
-              onChange={(e) => setF0UpKey(Number(e.target.value))}
-              className="w-full accent-purple-500" style={{ accentColor: "#7c4dff" }} />
-            <div className="flex justify-between text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>
-              <span>−12</span><span>0</span><span>+12</span>
-            </div>
-            <p className="text-[11px]" style={{ color: MUTED }}>
-              RVC auto-detects pitch from the reference and shifts accordingly.
-              Use this slider for an additional offset.
-            </p>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Convert button */}
       <button
         onClick={() => { reset(); startConvert.mutate(); }}
-        disabled={isRunning || !engineLoaded}
+        disabled={isRunning || !engineReady}
         className="w-full rounded-xl py-3 text-[14px] font-medium transition-all duration-150"
         style={{
-          background: isRunning || !engineLoaded
+          background: isRunning || !engineReady
             ? "rgba(124,77,255,0.25)"
             : "linear-gradient(135deg,#7c4dff 0%,#9d6fff 100%)",
-          color: isRunning || !engineLoaded ? "rgba(255,255,255,0.35)" : "#fff",
-          boxShadow: isRunning || !engineLoaded ? "none" : "0 2px 16px rgba(124,77,255,0.35)",
-          cursor: isRunning || !engineLoaded ? "not-allowed" : "pointer",
+          color: isRunning || !engineReady ? "rgba(255,255,255,0.35)" : "#fff",
+          boxShadow: isRunning || !engineReady ? "none" : "0 2px 16px rgba(124,77,255,0.35)",
+          cursor: isRunning || !engineReady ? "not-allowed" : "pointer",
         }}>
         {isRunning ? "Converting…" : "Convert"}
       </button>
